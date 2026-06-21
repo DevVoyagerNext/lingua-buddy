@@ -33,6 +33,24 @@
         <p v-for="(a, i) in result.alternatives" :key="i" class="muted">{{ a }}</p>
       </div>
     </div>
+
+    <div class="card">
+      <h3>译文对比</h3>
+      <p class="muted">输入原文与你自己的译文，AI 给出参考译文与点评。</p>
+      <textarea v-model="cmpSource" rows="2" placeholder="原文" style="margin-bottom: 8px"></textarea>
+      <textarea v-model="cmpUser" rows="2" placeholder="你的译文"></textarea>
+      <div class="row" style="margin-top: 10px">
+        <button :disabled="cmpLoading" @click="doCompare">{{ cmpLoading ? '对比中...' : '对比' }}</button>
+        <span v-if="cmpError" class="error">{{ cmpError }}</span>
+      </div>
+      <div v-if="compare" style="margin-top: 12px">
+        <p><b>参考译文：</b>{{ compare.reference_text }}</p>
+        <p class="muted">准确性：{{ compare.accuracy }}</p>
+        <p class="muted">语法：{{ compare.grammar_issues }}</p>
+        <p class="muted">自然度：{{ compare.naturalness }}</p>
+        <p class="muted">建议：{{ compare.suggestion }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -53,6 +71,28 @@ const loading = ref(false)
 const error = ref('')
 const collectMsg = ref('')
 const collectMsgClass = ref('ok')
+const cmpSource = ref('')
+const cmpUser = ref('')
+const compare = ref<any>(null)
+const cmpLoading = ref(false)
+const cmpError = ref('')
+
+async function doCompare() {
+  cmpError.value = ''
+  if (!cmpSource.value.trim() || !cmpUser.value.trim()) {
+    cmpError.value = '请输入原文和译文'
+    return
+  }
+  cmpLoading.value = true
+  try {
+    const resp = await api.post('/translations/compare', { source_text: cmpSource.value, user_text: cmpUser.value })
+    compare.value = resp.data
+  } catch (e) {
+    cmpError.value = e instanceof ApiError ? e.message : '对比失败'
+  } finally {
+    cmpLoading.value = false
+  }
+}
 
 async function doTranslate() {
   error.value = ''

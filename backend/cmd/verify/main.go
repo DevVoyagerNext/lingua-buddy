@@ -77,8 +77,8 @@ func testMySQL() result {
 	}
 	cfg := mysql.Config{
 		User: user, Passwd: env("DB_PASSWORD"), Net: "tcp",
-		Addr: orDefault("DB_ADDR", "127.0.0.1:3306"),
-		DBName: orDefault("DB_NAME", "lingua"),
+		Addr:                 orDefault("DB_ADDR", "127.0.0.1:3306"),
+		DBName:               orDefault("DB_NAME", "lingua"),
 		AllowNativePasswords: true,
 	}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
@@ -253,8 +253,8 @@ func testASR() result {
 	}
 	sample := "https://dashscope.oss-cn-beijing.aliyuncs.com/samples/audio/paraformer/hello_world_female2.wav"
 	payload := map[string]any{
-		"model": model,
-		"input": map[string]any{"file_urls": []string{sample}},
+		"model":      model,
+		"input":      map[string]any{"file_urls": []string{sample}},
 		"parameters": map[string]any{"language_hints": []string{"en", "zh"}},
 	}
 	b, _ := json.Marshal(payload)

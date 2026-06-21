@@ -2,14 +2,19 @@
 package app
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"lingua-buddy/internal/ai"
+	"lingua-buddy/internal/article"
 	"lingua-buddy/internal/asr"
 	"lingua-buddy/internal/auth"
 	"lingua-buddy/internal/config"
+	"lingua-buddy/internal/conversation"
 	"lingua-buddy/internal/dictionary"
+	"lingua-buddy/internal/essay"
 	"lingua-buddy/internal/grammar"
 	"lingua-buddy/internal/history"
 	"lingua-buddy/internal/httpx"
@@ -17,6 +22,9 @@ import (
 	"lingua-buddy/internal/middleware"
 	"lingua-buddy/internal/sentence"
 	"lingua-buddy/internal/speech"
+	"lingua-buddy/internal/storage"
+	"lingua-buddy/internal/training"
+	"lingua-buddy/internal/trainrec"
 	"lingua-buddy/internal/translation"
 	"lingua-buddy/internal/user"
 	"lingua-buddy/internal/worddistractor"
@@ -42,24 +50,33 @@ func New(cfg config.Config, db *gorm.DB) *gin.Engine {
 	registry := auth.NewRegistry(auth.NewUsernamePasswordStrategy(userRepo))
 	authSvc := auth.NewService(userRepo, registry, jwtManager)
 
+	// AI / ASR 与依赖它们的模块。
+	aiProvider := ai.NewProvider(cfg.AI)
+	userLevel := user.NewLevelLookup(userRepo)
+
 	lexRepo := lexicon.NewRepository(db)
-	dictSvc := dictionary.NewService(lexRepo, dictionary.NewHistoryRepository(db))
+	dictSvc := dictionary.NewService(lexRepo, dictionary.NewHistoryRepository(db), aiProvider, userLevel)
 
 	distractorSvc := worddistractor.NewService(lexRepo)
 	tokenManager := wordlearning.NewTokenManager(cfg.QuestionTokenSecret)
 	wlRepo := wordlearning.NewRepository(db)
 	wlSvc := wordlearning.NewService(wlRepo, lexRepo, distractorSvc, tokenManager)
-
-	// AI / ASR 与依赖它们的模块。
-	aiProvider := ai.NewProvider(cfg.AI)
 	asrProvider := asr.NewProvider(cfg.ASR)
-	levelLookup := user.NewLevelLookup(userRepo)
 	histRepo := history.NewRepository(db)
-	translationSvc := translation.NewService(aiProvider, histRepo, levelLookup)
-	grammarSvc := grammar.NewService(aiProvider, histRepo, levelLookup)
+	translationSvc := translation.NewService(aiProvider, histRepo, userLevel)
+	grammarSvc := grammar.NewService(aiProvider, histRepo, userLevel)
 	sentenceSvc := sentence.NewService(db)
 	wordnoteSvc := wordnote.NewService(db)
-	speechSvc := speech.NewService(db, asrProvider, histRepo, cfg.Upload.Dir)
+	ossStore, ossErr := storage.NewOSS(cfg.Upload)
+	if ossErr != nil {
+		log.Printf("OSS 初始化失败，语音将回退本地存储: %v", ossErr)
+	}
+	speechSvc := speech.NewService(db, asrProvider, histRepo, ossStore, cfg.Upload.Dir)
+	articleRepo := article.NewRepository(db)
+	recRepo := trainrec.NewRepository(db)
+	conversationSvc := conversation.NewService(db, aiProvider, userLevel)
+	essaySvc := essay.NewService(aiProvider, recRepo, histRepo, userLevel)
+	trainingSvc := training.NewService(db, aiProvider, recRepo, userLevel)
 
 	// ===== 路由 =====
 	v1 := r.Group("/api/v1")
@@ -82,6 +99,10 @@ func New(cfg config.Config, db *gorm.DB) *gin.Engine {
 	wordnote.NewHandler(wordnoteSvc).Register(authed)
 	speech.NewHandler(speechSvc).Register(authed)
 	history.NewHandler(histRepo).Register(authed)
+	article.NewHandler(articleRepo).Register(authed)
+	conversation.NewHandler(conversationSvc).Register(authed)
+	essay.NewHandler(essaySvc).Register(authed)
+	training.NewHandler(trainingSvc).Register(authed)
 
 	return r
 }

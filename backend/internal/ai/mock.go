@@ -54,6 +54,48 @@ func (m *Mock) Correct(_ context.Context, in CorrectionInput) (CorrectionOutput,
 	}, nil
 }
 
+// GenerateExamples 占位例句。
+func (m *Mock) GenerateExamples(_ context.Context, in ExampleInput) ([]Example, error) {
+	return []Example{{English: "This is a mock example with " + in.Word + ".", Chinese: "这是包含 " + in.Word + " 的示例句。", WordMeaning: "示例含义"}}, nil
+}
+
+// Chat 占位对话。
+func (m *Mock) Chat(_ context.Context, in ChatInput) (ChatOutput, error) {
+	return ChatOutput{Reply: "[mock] Sure, let's continue. You said: " + in.UserMessage, Feedback: "mock 反馈：表达清晰。"}, nil
+}
+
+// ReviewEssay 占位批改。
+func (m *Mock) ReviewEssay(_ context.Context, in EssayInput) (EssayReviewOutput, error) {
+	return EssayReviewOutput{
+		OverallComment: "[mock] 结构清晰，可继续提升用词。",
+		Scores:         EssayScores{Grammar: 80, Vocabulary: 78, Structure: 82, Coherence: 80},
+		RevisedText:    in.Body,
+		RevisionReason: "mock：示例修改原因。",
+	}, nil
+}
+
+// GenerateTranslationExercise 占位翻译题。
+func (m *Mock) GenerateTranslationExercise(_ context.Context, in TranslationExerciseInput) (TranslationExercise, error) {
+	if in.Direction == "en_to_zh" {
+		return TranslationExercise{Text: "Knowledge is power."}, nil
+	}
+	return TranslationExercise{Text: "知识就是力量。"}, nil
+}
+
+// EvaluateTranslation 占位评价。
+func (m *Mock) EvaluateTranslation(_ context.Context, in TranslationEvaluationInput) (TranslationEvaluation, error) {
+	return TranslationEvaluation{
+		ReferenceText: "[mock参考] " + in.SourceText,
+		Accuracy:      "基本准确（mock）", GrammarIssues: "无明显问题（mock）",
+		Naturalness: "可更自然（mock）", Suggestion: "[mock改写] " + in.UserText,
+	}, nil
+}
+
+// GenerateEssayTopic 占位作文题。
+func (m *Mock) GenerateEssayTopic(_ context.Context, in EssayTopicInput) (EssayTopic, error) {
+	return EssayTopic{Title: "[mock] The Importance of Learning English", Requirement: "mock：不少于 120 词。"}, nil
+}
+
 func firstWords(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 30 {

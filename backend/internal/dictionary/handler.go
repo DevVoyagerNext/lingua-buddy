@@ -23,8 +23,29 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.GET("/dictionary/entries/:word", h.lookup)
 	rg.GET("/dictionary/suggestions", h.suggest)
+	rg.POST("/dictionary/examples", h.examples)
 	rg.GET("/dictionary/history", h.history)
 	rg.DELETE("/dictionary/history/:id", h.deleteHistory)
+}
+
+type examplesReq struct {
+	Word       string `json:"word"`
+	Topic      string `json:"topic"`
+	Difficulty string `json:"difficulty"`
+}
+
+func (h *Handler) examples(c *gin.Context) {
+	var req examplesReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpx.Fail(c, httpx.ErrValidation("请求体格式错误"))
+		return
+	}
+	items, err := h.svc.Examples(c.Request.Context(), httpx.MustUserID(c), req.Word, req.Topic, req.Difficulty)
+	if err != nil {
+		httpx.Fail(c, err)
+		return
+	}
+	httpx.OK(c, items)
 }
 
 func (h *Handler) lookup(c *gin.Context) {

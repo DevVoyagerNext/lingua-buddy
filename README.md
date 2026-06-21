@@ -25,9 +25,10 @@ cd backend
 Copy-Item .env.example .env   # 然后按本地 MySQL/密钥修改 .env
 go run ./cmd/migrate          # 创建 15 张业务表（不改动只读 ecdict）
 go run ./cmd/server           # 启动 API（默认 http://127.0.0.1:8080）
+go run ./cmd/article-sync     # 导入 VOA 外刊（建议由系统计划任务每日触发）
 ```
 
-关键环境变量：`JWT_ACCESS_SECRET`、`QUESTION_TOKEN_SECRET` 必填；`AI_API_KEY` 配置后使用阿里云通义千问，留空或 `AI_PROVIDER=mock` 时使用内置 Mock，便于离线联调。
+关键环境变量：`JWT_ACCESS_SECRET`、`QUESTION_TOKEN_SECRET` 必填；`AI_API_KEY`（通义千问）、`ASR_API_KEY`（Paraformer 语音识别）与 `OBJECT_STORAGE_*`（OSS，语音音频存储）配置后即调用真实接口，留空或 `*_PROVIDER=mock` 时回退内置 Mock 以便离线联调。语音识别需 OSS：音频上传 OSS 取签名 URL 后交给 Paraformer 异步识别。
 
 测试：`go test ./...`（集成测试需要本地 MySQL 的 `lingua.ecdict`）。
 

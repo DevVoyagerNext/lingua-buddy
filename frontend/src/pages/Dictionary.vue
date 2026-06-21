@@ -58,6 +58,16 @@
       </div>
       <p v-if="collectMsg" :class="collectMsgClass">{{ collectMsg }}</p>
 
+      <div class="examples">
+        <button class="ghost small" :disabled="exLoading" @click="genExamples">
+          {{ exLoading ? 'AI 生成中...' : 'AI 例句' }}
+        </button>
+        <div v-for="(ex, i) in examples" :key="i" style="margin-top: 8px">
+          <p style="margin: 2px 0">{{ ex.english }}</p>
+          <p class="muted" style="margin: 2px 0">{{ ex.chinese }}（{{ ex.word_meaning }}）</p>
+        </div>
+      </div>
+
       <div class="notes">
         <h4>单词笔记</h4>
         <div class="row">
@@ -100,6 +110,21 @@ const collectMsg = ref('')
 const collectMsgClass = ref('ok')
 const notes = ref<{ id: number; content: string }[]>([])
 const noteContent = ref('')
+const examples = ref<{ english: string; chinese: string; word_meaning: string }[]>([])
+const exLoading = ref(false)
+
+async function genExamples() {
+  if (!entry.value) return
+  exLoading.value = true
+  try {
+    const resp = await api.post('/dictionary/examples', { word: entry.value.word, difficulty: 'cet4' })
+    examples.value = resp.data || []
+  } catch {
+    examples.value = []
+  } finally {
+    exLoading.value = false
+  }
+}
 
 let timer: any
 function onInput() {
@@ -127,6 +152,7 @@ async function doLookup(word: string) {
   notFound.value = false
   entry.value = null
   collectMsg.value = ''
+  examples.value = []
   try {
     const resp = await api.get<Entry>(`/dictionary/entries/${encodeURIComponent(w)}`)
     entry.value = resp.data

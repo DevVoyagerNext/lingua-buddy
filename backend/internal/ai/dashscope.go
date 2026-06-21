@@ -148,6 +148,92 @@ func (d *DashScope) Correct(ctx context.Context, in CorrectionInput) (Correction
 	return out, err
 }
 
+// GenerateExamples 生成 AI 例句。
+func (d *DashScope) GenerateExamples(ctx context.Context, in ExampleInput) ([]Example, error) {
+	n := in.Count
+	if n <= 0 {
+		n = 3
+	}
+	system := fmt.Sprintf("你是英语例句老师。为目标单词生成 %d 个例句。"+
+		"只返回 JSON：{\"examples\":[{\"english\":string,\"chinese\":string,\"word_meaning\":string}]}。"+
+		"english 为英文例句，chinese 为中文翻译，word_meaning 说明目标词在句中的含义。", n)
+	user := fmt.Sprintf("目标单词:%s 主题:%s 难度:%s 学习者水平:%s", in.Word, in.Topic, in.Difficulty, in.Level)
+	var wrap struct {
+		Examples []Example `json:"examples"`
+	}
+	if err := d.chatJSON(ctx, system, user, &wrap); err != nil {
+		return nil, err
+	}
+	return wrap.Examples, nil
+}
+
+// Chat 情景对话。
+func (d *DashScope) Chat(ctx context.Context, in ChatInput) (ChatOutput, error) {
+	system := fmt.Sprintf("你在进行英语情景对话练习。场景:%s，你扮演:%s，难度:%s，学习者水平:%s。"+
+		"用英文回复以维持对话；同时对用户上一条英文回复给简短中文反馈（语法/用词/更自然说法），无明显问题则反馈为空字符串。"+
+		"只返回 JSON：{\"reply\":string,\"feedback\":string}。reply 用英文，feedback 用中文。",
+		in.Scene, in.Role, in.Difficulty, in.Level)
+	var sb strings.Builder
+	for _, t := range in.History {
+		sb.WriteString(t.Role)
+		sb.WriteString(": ")
+		sb.WriteString(t.Content)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("user: ")
+	sb.WriteString(in.UserMessage)
+	var out ChatOutput
+	err := d.chatJSON(ctx, system, sb.String(), &out)
+	return out, err
+}
+
+// ReviewEssay 作文批改。
+func (d *DashScope) ReviewEssay(ctx context.Context, in EssayInput) (EssayReviewOutput, error) {
+	system := "你是英语作文批改老师。给出总体评价、分项评分(0-100)、问题清单、修改后参考文章与修改原因。" +
+		"评分仅供学习参考。只返回 JSON：{\"overall_comment\":string,\"scores\":{\"grammar\":int,\"vocabulary\":int,\"structure\":int,\"coherence\":int}," +
+		"\"issues\":[{\"type\":string,\"original\":string,\"replacement\":string,\"explanation_zh\":string}],\"revised_text\":string,\"revision_reason\":string}。解释用中文。"
+	user := fmt.Sprintf("作文类型:%s 目标考试:%s 题目要求:%s 学习者水平:%s\n标题:%s\n正文:\n%s",
+		in.EssayType, in.TargetExam, in.Requirement, in.Level, in.Title, in.Body)
+	var out EssayReviewOutput
+	err := d.chatJSON(ctx, system, user, &out)
+	return out, err
+}
+
+// GenerateTranslationExercise 生成翻译训练题目。
+func (d *DashScope) GenerateTranslationExercise(ctx context.Context, in TranslationExerciseInput) (TranslationExercise, error) {
+	dir := "中译英"
+	if in.Direction == "en_to_zh" {
+		dir = "英译中"
+	}
+	system := "你是翻译训练出题老师。生成一句适合练习的待翻译文本。" +
+		"只返回 JSON：{\"text\":string}。" +
+		map[bool]string{true: "text 为英文原文。", false: "text 为中文原文。"}[in.Direction == "en_to_zh"]
+	user := fmt.Sprintf("方向:%s 难度:%s 学习者水平:%s", dir, in.Difficulty, in.Level)
+	var out TranslationExercise
+	err := d.chatJSON(ctx, system, user, &out)
+	return out, err
+}
+
+// EvaluateTranslation 评价翻译训练答案。
+func (d *DashScope) EvaluateTranslation(ctx context.Context, in TranslationEvaluationInput) (TranslationEvaluation, error) {
+	system := "你是翻译训练评审。给参考译文与准确性、语法、自然度反馈和改写建议。" +
+		"只返回 JSON：{\"reference_text\":string,\"accuracy\":string,\"grammar_issues\":string,\"naturalness\":string,\"suggestion\":string}，解释用中文。"
+	user := fmt.Sprintf("方向:%s 学习者水平:%s\n原文:\n%s\n用户译文:\n%s", in.Direction, in.Level, in.SourceText, in.UserText)
+	var out TranslationEvaluation
+	err := d.chatJSON(ctx, system, user, &out)
+	return out, err
+}
+
+// GenerateEssayTopic 生成作文训练题目。
+func (d *DashScope) GenerateEssayTopic(ctx context.Context, in EssayTopicInput) (EssayTopic, error) {
+	system := "你是作文训练出题老师。生成一个英语作文题目与简要要求。" +
+		"只返回 JSON：{\"title\":string,\"requirement\":string}。title 为英文题目，requirement 用中文写要求。"
+	user := fmt.Sprintf("作文类型:%s 难度:%s 学习者水平:%s", in.EssayType, in.Difficulty, in.Level)
+	var out EssayTopic
+	err := d.chatJSON(ctx, system, user, &out)
+	return out, err
+}
+
 func stripFences(s string) string {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "```") {

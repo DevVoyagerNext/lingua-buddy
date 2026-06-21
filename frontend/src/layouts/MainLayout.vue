@@ -35,9 +35,13 @@ const menu = [
   { path: '/review', label: '到期复习' },
   { path: '/vocabulary', label: '生词本' },
   { path: '/sentences', label: '收藏句子' },
+  { path: '/articles', label: '外刊阅读' },
   { path: '/translate', label: '智能翻译' },
   { path: '/speech', label: '语音学习' },
   { path: '/grammar', label: '语法工具' },
+  { path: '/conversation', label: 'AI 对话' },
+  { path: '/essay', label: '作文批改' },
+  { path: '/training', label: '专项训练' },
   { path: '/history', label: '历史中心' },
   { path: '/settings', label: '个人设置' },
 ]

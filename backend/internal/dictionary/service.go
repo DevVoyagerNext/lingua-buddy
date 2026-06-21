@@ -5,19 +5,40 @@ import (
 	"log"
 	"strings"
 
+	"lingua-buddy/internal/ai"
+	"lingua-buddy/internal/httpx"
 	"lingua-buddy/internal/lexicon"
 	"lingua-buddy/internal/models"
+	"lingua-buddy/internal/user"
 )
 
 // Service 查词服务。
 type Service struct {
 	lex     *lexicon.Repository
 	history *HistoryRepository
+	ai      ai.Provider
+	level   user.LevelLookup
 }
 
 // NewService 构造查词服务。
-func NewService(lex *lexicon.Repository, history *HistoryRepository) *Service {
-	return &Service{lex: lex, history: history}
+func NewService(lex *lexicon.Repository, history *HistoryRepository, provider ai.Provider, level user.LevelLookup) *Service {
+	return &Service{lex: lex, history: history, ai: provider, level: level}
+}
+
+// Examples 生成 AI 例句（DICT-03）。AI 失败不影响基础查词。
+func (s *Service) Examples(ctx context.Context, userID uint64, word, topic, difficulty string) ([]ai.Example, error) {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return nil, lexicon.ErrNotFound
+	}
+	out, err := s.ai.GenerateExamples(ctx, ai.ExampleInput{
+		Word: word, Topic: topic, Difficulty: difficulty, Level: s.level.Level(ctx, userID), Count: 3,
+	})
+	if err != nil {
+		status, code, msg := ai.ErrorCode(err)
+		return nil, httpx.NewError(status, code, msg)
+	}
+	return out, nil
 }
 
 // Lookup 精确查词；命中后记录登录用户的查词历史（失败不阻断查询）。
