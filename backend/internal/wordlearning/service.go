@@ -107,14 +107,37 @@ func (s *Service) RemoveWord(ctx context.Context, userID, id uint64) error {
 	return nil
 }
 
-// ListWords 生词列表。
-func (s *Service) ListWords(ctx context.Context, userID uint64, stage, keyword string, page, size int) ([]models.UserWord, int64, error) {
-	return s.repo.ListUserWords(ctx, userID, stage, keyword, page, size)
+// WordWithDef 生词及其中文释义。
+type WordWithDef struct {
+	Word       models.UserWord
+	Definition string
+}
+
+// ListWords 生词列表，附带中文释义。
+func (s *Service) ListWords(ctx context.Context, userID uint64, stage, keyword string, page, size int) ([]WordWithDef, int64, error) {
+	items, total, err := s.repo.ListUserWords(ctx, userID, stage, keyword, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]WordWithDef, 0, len(items))
+	for _, it := range items {
+		def := ""
+		if it.ECDICTEntryID != nil {
+			if e, e2 := s.lex.GetByID(ctx, *it.ECDICTEntryID); e2 == nil {
+				def = strings.Join(e.Translations, "\n")
+			}
+		}
+		out = append(out, WordWithDef{Word: it, Definition: def})
+	}
+	return out, total, nil
 }
 
 // ===== 计划 =====
 
 // CreatePlan 创建词汇计划：拉取标签词、过滤词组、频率分桶打乱、批量入队。
+// FixedGroupSize 每组固定的单词数（不可由用户自定义）。
+const FixedGroupSize = 10
+
 func (s *Service) CreatePlan(ctx context.Context, userID uint64, name, sourceValue string) (*models.WordLearningPlan, PlanCounts, error) {
 	if _, ok := map[string]bool{"cet4": true, "cet6": true, "zk": true, "gk": true, "ky": true, "toefl": true, "ielts": true, "gre": true}[sourceValue]; !ok {
 		return nil, PlanCounts{}, httpx.ErrValidation("不支持的词表标签")
@@ -150,6 +173,7 @@ func (s *Service) CreatePlan(ctx context.Context, userID uint64, name, sourceVal
 		OrderingMode:        "frequency_shuffled",
 		ShuffleSeed:         seed,
 		SourceSnapshotCount: len(ordered),
+		GroupSize:           FixedGroupSize,
 		DailyNewWordLimit:   10,
 		ActiveWordLimit:     20,
 		Status:              "active",
@@ -174,14 +198,20 @@ func (s *Service) CreatePlan(ctx context.Context, userID uint64, name, sourceVal
 }
 
 func defaultPlanName(tag string) string {
-	switch tag {
-	case "cet4":
-		return "四级词汇"
-	case "cet6":
-		return "六级词汇"
-	default:
-		return tag + " 词汇"
+	names := map[string]string{
+		"zk":    "中考词汇",
+		"gk":    "高考词汇",
+		"cet4":  "四级词汇",
+		"cet6":  "六级词汇",
+		"ky":    "考研词汇",
+		"toefl": "托福词汇",
+		"ielts": "雅思词汇",
+		"gre":   "GRE 词汇",
 	}
+	if n, ok := names[tag]; ok {
+		return n
+	}
+	return tag + " 词汇"
 }
 
 // frequencyShuffle 频率分桶 + 桶内固定种子打乱。

@@ -1,7 +1,7 @@
 <template>
   <div class="auth-wrap">
     <div class="card auth-card">
-      <h2 class="title">注册 Lingua Buddy</h2>
+      <h2 class="title">注册英语学习助手</h2>
       <div class="col">
         <input v-model="username" placeholder="用户名（3-30 位字母/数字/下划线）" />
         <input v-model="email" placeholder="邮箱（可选）" />

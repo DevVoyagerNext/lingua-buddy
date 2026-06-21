@@ -36,6 +36,7 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.POST("/word-learning/plan-items/:id/skip", h.skip)
 	rg.GET("/word-learning/words", h.planWords)
 	rg.GET("/word-learning/wrong-answers", h.wrongAnswers)
+	h.RegisterGroups(rg)
 }
 
 // WordView 生词视图。
@@ -47,6 +48,7 @@ type WordView struct {
 	StageCorrectStreak int       `json:"stage_correct_streak"`
 	NextReviewAt       time.Time `json:"next_review_at"`
 	CreatedAt          time.Time `json:"created_at"`
+	Definition         string    `json:"definition"`
 }
 
 func toWordView(u models.UserWord) WordView {
@@ -85,7 +87,9 @@ func (h *Handler) listWords(c *gin.Context) {
 	}
 	views := make([]WordView, 0, len(items))
 	for _, it := range items {
-		views = append(views, toWordView(it))
+		v := toWordView(it.Word)
+		v.Definition = it.Definition
+		views = append(views, v)
 	}
 	httpx.OK(c, httpx.Page{Items: views, Page: page, PageSize: size, Total: total})
 }

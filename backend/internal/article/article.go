@@ -32,14 +32,20 @@ func (r *Repository) Upsert(ctx context.Context, a *models.Article) error {
 	}).Create(a).Error
 }
 
-// List 分页查询文章，可按难度过滤、标题搜索。
-func (r *Repository) List(ctx context.Context, difficulty, keyword string, page, size int) ([]models.Article, int64, error) {
+// dateExpr 文章归属日期：发布时间优先，缺失时用导入时间，格式化为 YYYY-MM-DD 字符串。
+const dateExpr = "DATE_FORMAT(COALESCE(published_at, created_at), '%Y-%m-%d')"
+
+// List 分页查询文章，可按难度过滤、标题搜索、按归属日期筛选。
+func (r *Repository) List(ctx context.Context, difficulty, keyword, date string, page, size int) ([]models.Article, int64, error) {
 	tx := r.db.WithContext(ctx).Model(&models.Article{})
 	if difficulty != "" {
 		tx = tx.Where("difficulty = ?", difficulty)
 	}
 	if keyword != "" {
 		tx = tx.Where("title LIKE ?", "%"+keyword+"%")
+	}
+	if date != "" {
+		tx = tx.Where(dateExpr+" = ?", date)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -57,6 +63,41 @@ func (r *Repository) Get(ctx context.Context, id uint64) (*models.Article, error
 		return nil, err
 	}
 	return &a, nil
+}
+
+// GetWithNeighbors 查询文章及其相邻文章（按发布时间倒序排列时的上一篇=更新、下一篇=更旧）。
+func (r *Repository) GetWithNeighbors(ctx context.Context, id uint64) (*models.Article, *uint64, *uint64, error) {
+	a, err := r.Get(ctx, id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	effective := a.CreatedAt
+	if a.PublishedAt != nil {
+		effective = *a.PublishedAt
+	}
+	order := "COALESCE(published_at, created_at)"
+
+	// 上一篇（更新的一篇）：时间更晚，或同刻 id 更大。
+	var prevID *uint64
+	var prev models.Article
+	if err := r.db.WithContext(ctx).
+		Select("id").
+		Where(order+" > ? OR ("+order+" = ? AND id > ?)", effective, effective, a.ID).
+		Order(order + " ASC, id ASC").Limit(1).Take(&prev).Error; err == nil {
+		prevID = &prev.ID
+	}
+
+	// 下一篇（更旧的一篇）：时间更早，或同刻 id 更小。
+	var nextID *uint64
+	var next models.Article
+	if err := r.db.WithContext(ctx).
+		Select("id").
+		Where(order+" < ? OR ("+order+" = ? AND id < ?)", effective, effective, a.ID).
+		Order(order + " DESC, id DESC").Limit(1).Take(&next).Error; err == nil {
+		nextID = &next.ID
+	}
+
+	return a, prevID, nextID, nil
 }
 
 // MarkRead 新增或更新阅读记录。
@@ -122,9 +163,16 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.POST("/articles/:id/read", h.read)
 }
 
+// articleDetail 文章详情 + 相邻文章 ID。
+type articleDetail struct {
+	models.Article
+	PrevID *uint64 `json:"prev_id"`
+	NextID *uint64 `json:"next_id"`
+}
+
 func (h *Handler) list(c *gin.Context) {
 	page, size := httpx.ParsePagination(c)
-	items, total, err := h.repo.List(c.Request.Context(), c.Query("difficulty"), c.Query("keyword"), page, size)
+	items, total, err := h.repo.List(c.Request.Context(), c.Query("difficulty"), c.Query("keyword"), c.Query("date"), page, size)
 	if err != nil {
 		httpx.Fail(c, err)
 		return
@@ -134,12 +182,12 @@ func (h *Handler) list(c *gin.Context) {
 
 func (h *Handler) get(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	a, err := h.repo.Get(c.Request.Context(), id)
+	a, prevID, nextID, err := h.repo.GetWithNeighbors(c.Request.Context(), id)
 	if err != nil {
 		httpx.Fail(c, httpx.ErrNotFound("文章不存在"))
 		return
 	}
-	httpx.OK(c, a)
+	httpx.OK(c, articleDetail{Article: *a, PrevID: prevID, NextID: nextID})
 }
 
 type readReq struct {

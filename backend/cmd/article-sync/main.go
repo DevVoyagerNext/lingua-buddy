@@ -27,7 +27,7 @@ func main() {
 		log.Fatal("未配置 ARTICLE_FEED_URLS")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
 	syncer := article.NewSyncer(article.NewRepository(db))

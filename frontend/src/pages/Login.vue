@@ -1,7 +1,7 @@
 <template>
   <div class="auth-wrap">
     <div class="card auth-card">
-      <h2 class="title">登录 Lingua Buddy</h2>
+      <h2 class="title">登录英语学习助手</h2>
       <div class="col">
         <input v-model="login" placeholder="用户名或邮箱" @keyup.enter="onSubmit" />
         <input v-model="password" type="password" placeholder="密码" @keyup.enter="onSubmit" />
@@ -35,7 +35,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await auth.login(login.value, password.value)
-    router.push('/dashboard')
+    router.push('/dictionary')
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '登录失败'
   } finally {

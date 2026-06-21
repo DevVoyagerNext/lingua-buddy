@@ -43,7 +43,7 @@ async function onSave() {
   loading.value = true
   try {
     await auth.updateProfile({ english_level: selected.value })
-    router.push('/dashboard')
+    router.push('/dictionary')
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '保存失败'
   } finally {

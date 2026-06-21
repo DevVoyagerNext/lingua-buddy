@@ -30,14 +30,14 @@ func hashSentence(s string) string {
 }
 
 // Create 收藏句子，按 (user_id, sentence_hash) 去重。
-func (s *Service) Create(ctx context.Context, userID uint64, sentence string, translation, note *string) (*models.UserSentence, error) {
+func (s *Service) Create(ctx context.Context, userID uint64, sentence string, translation, analysis, note *string) (*models.UserSentence, error) {
 	sentence = strings.TrimSpace(sentence)
 	if sentence == "" {
 		return nil, httpx.ErrValidation("句子不能为空")
 	}
 	rec := &models.UserSentence{
 		UserID: userID, Sentence: sentence, SentenceHash: hashSentence(sentence),
-		Translation: translation, Note: note,
+		Translation: translation, Analysis: analysis, Note: note,
 	}
 	if err := s.db.WithContext(ctx).Create(rec).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -63,11 +63,14 @@ func (s *Service) List(ctx context.Context, userID uint64, keyword string, page,
 	return items, total, err
 }
 
-// Update 修改翻译或备注。
-func (s *Service) Update(ctx context.Context, userID, id uint64, translation, note *string) error {
+// Update 修改翻译、句子分析或备注。
+func (s *Service) Update(ctx context.Context, userID, id uint64, translation, analysis, note *string) error {
 	fields := map[string]any{}
 	if translation != nil {
 		fields["translation"] = *translation
+	}
+	if analysis != nil {
+		fields["analysis"] = *analysis
 	}
 	if note != nil {
 		fields["note"] = *note
@@ -115,6 +118,7 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 type createReq struct {
 	Sentence    string  `json:"sentence"`
 	Translation *string `json:"translation"`
+	Analysis    *string `json:"analysis"`
 	Note        *string `json:"note"`
 }
 
@@ -124,7 +128,7 @@ func (h *Handler) create(c *gin.Context) {
 		httpx.Fail(c, httpx.ErrValidation("请求体格式错误"))
 		return
 	}
-	rec, err := h.svc.Create(c.Request.Context(), httpx.MustUserID(c), req.Sentence, req.Translation, req.Note)
+	rec, err := h.svc.Create(c.Request.Context(), httpx.MustUserID(c), req.Sentence, req.Translation, req.Analysis, req.Note)
 	if err != nil {
 		httpx.Fail(c, err)
 		return
@@ -144,6 +148,7 @@ func (h *Handler) list(c *gin.Context) {
 
 type updateReq struct {
 	Translation *string `json:"translation"`
+	Analysis    *string `json:"analysis"`
 	Note        *string `json:"note"`
 }
 
@@ -154,7 +159,7 @@ func (h *Handler) update(c *gin.Context) {
 		httpx.Fail(c, httpx.ErrValidation("请求体格式错误"))
 		return
 	}
-	if err := h.svc.Update(c.Request.Context(), httpx.MustUserID(c), id, req.Translation, req.Note); err != nil {
+	if err := h.svc.Update(c.Request.Context(), httpx.MustUserID(c), id, req.Translation, req.Analysis, req.Note); err != nil {
 		httpx.Fail(c, err)
 		return
 	}

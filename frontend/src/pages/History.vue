@@ -33,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onActivated } from 'vue'
 import { api } from '@/api/client'
 
 interface Hist {
@@ -76,7 +76,7 @@ async function del(id: number) {
   await load()
 }
 
-onMounted(load)
+onActivated(load)
 </script>
 
 <style scoped>

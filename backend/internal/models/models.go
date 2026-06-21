@@ -53,6 +53,7 @@ type WordLearningPlan struct {
 	OrderingMode        string     `gorm:"size:32;not null;default:frequency_shuffled" json:"ordering_mode"`
 	ShuffleSeed         int64      `gorm:"not null" json:"-"`
 	SourceSnapshotCount int        `gorm:"not null;default:0" json:"source_snapshot_count"`
+	GroupSize           int        `gorm:"not null;default:20" json:"group_size"`
 	DailyNewWordLimit   int        `gorm:"not null;default:10" json:"daily_new_word_limit"`
 	ActiveWordLimit     int        `gorm:"not null;default:20" json:"active_word_limit"`
 	Status              string     `gorm:"size:16;not null;default:active;index" json:"status"`
@@ -96,6 +97,21 @@ type UserWord struct {
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
+// WordGroupProgress 按组学习的进度（每个计划的每一组一行）。
+// review_count=0 表示尚未学过（首学含详细释义）；>=1 表示已学过（复习只走三步）。
+type WordGroupProgress struct {
+	ID             uint64     `gorm:"primaryKey" json:"id"`
+	UserID         uint64     `gorm:"not null;uniqueIndex:uk_group_progress,priority:1" json:"user_id"`
+	PlanID         uint64     `gorm:"not null;uniqueIndex:uk_group_progress,priority:2" json:"plan_id"`
+	GroupIndex     int        `gorm:"not null;uniqueIndex:uk_group_progress,priority:3" json:"group_index"`
+	ReviewCount    int        `gorm:"not null;default:0" json:"review_count"`
+	FirstStudiedAt *time.Time `json:"first_studied_at"`
+	LastStudiedAt  *time.Time `json:"last_studied_at"`
+	NextReviewAt   *time.Time `json:"next_review_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
 // UserWordNote 用户为单词添加的笔记，同一单词可多条。
 type UserWordNote struct {
 	ID        uint64    `gorm:"primaryKey" json:"id"`
@@ -113,6 +129,7 @@ type UserSentence struct {
 	Sentence     string    `gorm:"type:text;not null" json:"sentence"`
 	SentenceHash string    `gorm:"size:64;not null;uniqueIndex:uk_user_sentence,priority:2" json:"-"`
 	Translation  *string   `gorm:"type:text" json:"translation"`
+	Analysis     *string   `gorm:"type:text" json:"analysis"` // 句子分析结果（JSON 字符串）
 	Note         *string   `gorm:"type:text" json:"note"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -258,6 +275,7 @@ func BusinessModels() []any {
 		&User{},
 		&WordLearningPlan{},
 		&WordLearningPlanItem{},
+		&WordGroupProgress{},
 		&UserWord{},
 		&UserWordNote{},
 		&UserSentence{},

@@ -16,7 +16,8 @@ var ErrNotFound = errors.New("dictionary entry not found")
 
 // Suggestion 联想/纠错建议项。
 type Suggestion struct {
-	Word string `json:"word"`
+	Word  string `json:"word"`
+	Gloss string `json:"gloss"` // 简短中文释义
 }
 
 // Repository 只读查询 ecdict。
@@ -68,7 +69,7 @@ func (r *Repository) Suggest(ctx context.Context, prefix string, limit int) ([]S
 	}
 	var rows []models.ECDICTEntry
 	err := r.db.WithContext(ctx).
-		Select("word", "frq").
+		Select("word", "translation", "frq").
 		Where("word LIKE ?", normalized+"%").
 		// frq 为 NULL 或 0 表示“无词频数据”，排最后；其余按 frq 升序（越小越常用）。
 		Order("(frq IS NULL OR frq = 0)").
@@ -81,9 +82,17 @@ func (r *Repository) Suggest(ctx context.Context, prefix string, limit int) ([]S
 	}
 	out := make([]Suggestion, 0, len(rows))
 	for _, m := range rows {
-		out = append(out, Suggestion{Word: m.Word})
+		out = append(out, Suggestion{Word: m.Word, Gloss: glossOf(m.Translation)})
 	}
 	return out, nil
+}
+
+// glossOf 从 translation 列生成简短中文释义。
+func glossOf(translation *string) string {
+	if translation == nil {
+		return ""
+	}
+	return CanonicalGloss(*translation)
 }
 
 // SuggestSimilar 在精确查词未命中时给出相近拼写建议（DICT-01）。
@@ -104,13 +113,14 @@ func (r *Repository) SuggestSimilar(ctx context.Context, word string, limit int)
 	wl := len([]rune(w))
 
 	type cand struct {
-		word string
-		frq  int
+		word  string
+		gloss string
+		frq   int
 	}
 	var rows []models.ECDICTEntry
 	// 前缀 + 长度窗口大幅缩小候选；按词频优先保留常用词，避免 LIMIT 把目标词截断。
 	err := r.db.WithContext(ctx).
-		Select("word", "frq").
+		Select("word", "translation", "frq").
 		Where("word LIKE ?", prefix+"%").
 		Where("CHAR_LENGTH(word) BETWEEN ? AND ?", wl-2, wl+2).
 		Order("(frq IS NULL OR frq = 0)").
@@ -134,7 +144,7 @@ func (r *Repository) SuggestSimilar(ctx context.Context, word string, limit int)
 		if m.FRQ != nil && *m.FRQ > 0 {
 			frq = *m.FRQ
 		}
-		cands = append(cands, cand{word: m.Word, frq: frq})
+		cands = append(cands, cand{word: m.Word, gloss: glossOf(m.Translation), frq: frq})
 	}
 	sort.Slice(cands, func(i, j int) bool {
 		di := Levenshtein(w, strings.ToLower(cands[i].word))
@@ -149,7 +159,7 @@ func (r *Repository) SuggestSimilar(ctx context.Context, word string, limit int)
 	}
 	out := make([]Suggestion, 0, len(cands))
 	for _, c := range cands {
-		out = append(out, Suggestion{Word: c.word})
+		out = append(out, Suggestion{Word: c.word, Gloss: c.gloss})
 	}
 	return out, nil
 }

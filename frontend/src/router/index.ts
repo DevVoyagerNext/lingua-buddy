@@ -8,8 +8,7 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [
-      { path: '', redirect: '/dashboard' },
-      { path: 'dashboard', component: () => import('@/pages/Dashboard.vue') },
+      { path: '', redirect: '/dictionary' },
       { path: 'onboarding', component: () => import('@/pages/Onboarding.vue') },
       { path: 'dictionary', component: () => import('@/pages/Dictionary.vue') },
       { path: 'vocabulary', component: () => import('@/pages/Vocabulary.vue') },
@@ -20,7 +19,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'articles', component: () => import('@/pages/Articles.vue') },
       { path: 'articles/:id', component: () => import('@/pages/ArticleReader.vue') },
       { path: 'translate', component: () => import('@/pages/Translate.vue') },
-      { path: 'speech', component: () => import('@/pages/Speech.vue') },
       { path: 'grammar', component: () => import('@/pages/Grammar.vue') },
       { path: 'conversation', component: () => import('@/pages/Conversation.vue') },
       { path: 'essay', component: () => import('@/pages/Essay.vue') },
@@ -29,7 +27,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'settings', component: () => import('@/pages/Settings.vue') },
     ],
   },
-  { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
+  { path: '/:pathMatch(.*)*', redirect: '/dictionary' },
 ]
 
 const router = createRouter({

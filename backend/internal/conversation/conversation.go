@@ -4,6 +4,7 @@ package conversation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -28,13 +29,49 @@ func NewService(db *gorm.DB, provider ai.Provider, level user.LevelLookup) *Serv
 	return &Service{db: db, ai: provider, level: level}
 }
 
+// sceneLabels 场景中文名。
+var sceneLabels = map[string]string{
+	"travel":     "旅行对话",
+	"restaurant": "餐厅点餐",
+	"campus":     "校园交流",
+	"interview":  "求职面试",
+	"cet":        "CET口语",
+	"free":       "自由对话",
+}
+
+func sceneLabel(scene string) string {
+	if l, ok := sceneLabels[scene]; ok {
+		return l
+	}
+	return scene
+}
+
+// uniqueTitle 为会话生成同一用户内不重复的名称，如「餐厅点餐 1」。
+func (s *Service) uniqueTitle(ctx context.Context, userID uint64, scene string) string {
+	base := sceneLabel(scene)
+	var count int64
+	s.db.WithContext(ctx).Model(&models.Conversation{}).
+		Where("user_id = ? AND scene = ?", userID, scene).Count(&count)
+	n := int(count) + 1
+	for {
+		candidate := fmt.Sprintf("%s %d", base, n)
+		var exists int64
+		s.db.WithContext(ctx).Model(&models.Conversation{}).
+			Where("user_id = ? AND title = ?", userID, candidate).Count(&exists)
+		if exists == 0 {
+			return candidate
+		}
+		n++
+	}
+}
+
 // Create 新建会话。
 func (s *Service) Create(ctx context.Context, userID uint64, scene, difficulty, role, title string) (*models.Conversation, error) {
 	if scene == "" {
 		scene = "free"
 	}
 	if title == "" {
-		title = scene
+		title = s.uniqueTitle(ctx, userID, scene)
 	}
 	conv := &models.Conversation{
 		UserID: userID, Title: title, Scene: scene, Difficulty: difficulty, Status: "active",
@@ -45,11 +82,27 @@ func (s *Service) Create(ctx context.Context, userID uint64, scene, difficulty, 
 	return conv, nil
 }
 
-// List 会话列表（按最近更新倒序）。
-func (s *Service) List(ctx context.Context, userID uint64) ([]models.Conversation, error) {
+// ConversationView 会话列表项，附带最近一条用户消息预览。
+type ConversationView struct {
+	models.Conversation
+	LastMessage string `json:"last_message"`
+}
+
+// List 会话列表（按创建顺序正序，新会话排在最后）。
+func (s *Service) List(ctx context.Context, userID uint64) ([]ConversationView, error) {
 	var items []models.Conversation
-	err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("updated_at DESC").Find(&items).Error
-	return items, err
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("id ASC").Find(&items).Error; err != nil {
+		return nil, err
+	}
+	views := make([]ConversationView, 0, len(items))
+	for _, c := range items {
+		var msg models.ConversationMessage
+		s.db.WithContext(ctx).
+			Where("conversation_id = ? AND role = ?", c.ID, "user").
+			Order("created_at DESC").Limit(1).Take(&msg)
+		views = append(views, ConversationView{Conversation: c, LastMessage: msg.Content})
+	}
+	return views, nil
 }
 
 // Messages 会话消息（按时间正序）。
@@ -93,7 +146,7 @@ func (s *Service) Send(ctx context.Context, userID, convID uint64, content strin
 	}
 
 	out, err := s.ai.Chat(ctx, ai.ChatInput{
-		Scene: conv.Scene, Difficulty: conv.Difficulty, Role: conv.Title,
+		Scene: conv.Scene, Difficulty: conv.Difficulty, Role: conv.Scene,
 		Level: s.level.Level(ctx, userID), History: turns, UserMessage: content,
 	})
 	if err != nil {
