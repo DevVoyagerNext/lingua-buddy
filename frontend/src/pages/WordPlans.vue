@@ -174,7 +174,7 @@ async function enterPlan(p: Plan) {
       if (active) await api.post(`/word-learning/plans/${active.id}/pause`)
       await api.post(`/word-learning/plans/${p.id}/activate`)
     }
-    router.push('/word-learning')
+    router.push({ path: '/word-learning', query: { plan: String(p.id) } })
   } catch (e) {
     msg.value = e instanceof ApiError ? e.message : '操作失败'
     msgClass.value = 'error'

@@ -98,7 +98,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onActivated, onDeactivated } from 'vue'
+import { useRoute } from 'vue-router'
 import { api, ApiError } from '@/api/client'
+
+const route = useRoute()
 
 interface GroupSummary {
   index: number
@@ -123,6 +126,7 @@ type View = 'loading' | 'no_plan' | 'all_done' | 'between' | 'studying'
 
 const view = ref<View>('loading')
 const planName = ref('')
+const loadedPlanId = ref('') // 已加载的书（计划）ID，用于判断是否切换了书
 const groups = ref<GroupSummary[]>([])
 const session = ref<Session | null>(null)
 const wordIdx = ref(0)
@@ -272,8 +276,14 @@ async function finishGroup() {
 
 onActivated(() => {
   window.speechSynthesis?.cancel()
-  // 切走再切回时，保留正在进行的学习/完成现场，不重置进度；
-  // 只有没有进行中的会话（首次进入、无计划、全部学完）才自动开始下一组。
+  const enteredPlan = (route.query.plan as string) || ''
+  // 进入了不同的书：重新调用接口刷新要学习的单词。
+  if (enteredPlan && enteredPlan !== loadedPlanId.value) {
+    loadedPlanId.value = enteredPlan
+    autoStart()
+    return
+  }
+  // 同一本书：保留正在进行的学习/完成现场，不重新拉取。
   if ((view.value === 'studying' && session.value) || view.value === 'between') return
   autoStart()
 })

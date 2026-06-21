@@ -24,7 +24,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'essay', component: () => import('@/pages/Essay.vue') },
       { path: 'training', component: () => import('@/pages/Training.vue') },
       { path: 'history', component: () => import('@/pages/History.vue') },
-      { path: 'settings', component: () => import('@/pages/Settings.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dictionary' },

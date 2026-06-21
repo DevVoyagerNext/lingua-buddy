@@ -4,7 +4,6 @@ package conversation
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -46,32 +45,13 @@ func sceneLabel(scene string) string {
 	return scene
 }
 
-// uniqueTitle 为会话生成同一用户内不重复的名称，如「餐厅点餐 1」。
-func (s *Service) uniqueTitle(ctx context.Context, userID uint64, scene string) string {
-	base := sceneLabel(scene)
-	var count int64
-	s.db.WithContext(ctx).Model(&models.Conversation{}).
-		Where("user_id = ? AND scene = ?", userID, scene).Count(&count)
-	n := int(count) + 1
-	for {
-		candidate := fmt.Sprintf("%s %d", base, n)
-		var exists int64
-		s.db.WithContext(ctx).Model(&models.Conversation{}).
-			Where("user_id = ? AND title = ?", userID, candidate).Count(&exists)
-		if exists == 0 {
-			return candidate
-		}
-		n++
-	}
-}
-
 // Create 新建会话。
 func (s *Service) Create(ctx context.Context, userID uint64, scene, difficulty, role, title string) (*models.Conversation, error) {
 	if scene == "" {
 		scene = "free"
 	}
 	if title == "" {
-		title = s.uniqueTitle(ctx, userID, scene)
+		title = sceneLabel(scene) // 标题固定为场景名，允许重复
 	}
 	conv := &models.Conversation{
 		UserID: userID, Title: title, Scene: scene, Difficulty: difficulty, Status: "active",
